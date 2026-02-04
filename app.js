@@ -446,21 +446,32 @@ function getSvgDimensions(svg) {
 /**
  * Handle Lottie download
  */
-function handleDownload() {
+async function handleDownload() {
     const svg = svgContainer.querySelector('svg');
     const { width, height } = getSvgDimensions(svg);
 
-    const lottieData = generateLottie({
-        stepMs: parseInt(stepDurationInput.value),
-        fps: 30,
-        width,
-        height,
-        svgBase64: svgBase64Clean,
-        paths,
-        elements: svgElements
-    });
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = 'Converting...';
 
-    downloadLottie(lottieData);
+    try {
+        const lottieData = await generateLottie({
+            stepMs: parseInt(stepDurationInput.value),
+            fps: 30,
+            width,
+            height,
+            svgBase64: svgBase64Clean,
+            paths,
+            elements: svgElements
+        });
+
+        downloadLottie(lottieData);
+    } catch (err) {
+        console.error('Lottie generation failed:', err);
+        alert('Failed to generate Lottie file. See console for details.');
+    } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = 'Download Lottie';
+    }
 }
 
 // =============================================================================
