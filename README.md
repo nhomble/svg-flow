@@ -2,4 +2,8 @@
 
 animate the flow through a svg diagram
 
-![](./docs/example.lottie)
+![](./examples/mmd.gif)
+
+## Local Development
+
+`python -m http.server` and then look at `./examples/`
