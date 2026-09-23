@@ -379,6 +379,11 @@ function loadSVG(file) {
         }
 
         const parsedRoot = parsedDoc.documentElement;
+        if (parsedRoot.tagName.toLowerCase() !== 'svg') {
+            console.error('Failed to parse SVG file: no svg root element');
+            alert('The file does not contain a valid SVG.');
+            return;
+        }
         sanitizeSvgNode(parsedRoot);
         svgContainer.replaceChildren(parsedRoot);
 
@@ -572,7 +577,7 @@ dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.svg')) loadSVG(file);
+    if (file && file.name.toLowerCase().endsWith('.svg')) loadSVG(file);
 });
 fileInput.addEventListener('change', (e) => {
     if (e.target.files[0]) loadSVG(e.target.files[0]);
