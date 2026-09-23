@@ -118,8 +118,6 @@ function removeFromPath(idx) {
         updatePath();
     }
 }
-// Expose to global scope for onclick handlers
-window.removeFromPath = removeFromPath;
 
 /**
  * Fork a new path starting from an element in the current path
@@ -143,8 +141,6 @@ function forkFromElement(idx) {
     renderPathTabs();
     updatePath();
 }
-// Expose to global scope for onclick handlers
-window.forkFromElement = forkFromElement;
 
 /**
  * Add a new empty animation path
@@ -192,14 +188,37 @@ function updatePath() {
     const pathColor = path ? path.color : '#6c63ff';
 
     // Update list with fork buttons
-    pathList.innerHTML = elements.map((id, i) => `
-        <li>
-            <span class="num" style="background: ${pathColor}">${i + 1}</span>
-            <span class="name" title="${id}">${id}</span>
-            <button class="fork" onclick="forkFromElement(${i})" title="Fork new path from here">fork</button>
-            <button class="remove" onclick="removeFromPath(${i})">×</button>
-        </li>
-    `).join('');
+    pathList.innerHTML = '';
+    elements.forEach((id, i) => {
+        const li = document.createElement('li');
+
+        const num = document.createElement('span');
+        num.className = 'num';
+        num.style.background = pathColor;
+        num.textContent = i + 1;
+        li.appendChild(num);
+
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.setAttribute('title', id);
+        name.textContent = id;
+        li.appendChild(name);
+
+        const forkBtn = document.createElement('button');
+        forkBtn.className = 'fork';
+        forkBtn.title = 'Fork new path from here';
+        forkBtn.textContent = 'fork';
+        forkBtn.addEventListener('click', () => forkFromElement(i));
+        li.appendChild(forkBtn);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => removeFromPath(i));
+        li.appendChild(removeBtn);
+
+        pathList.appendChild(li);
+    });
 
     // Clear existing highlights
     svgContainer.querySelectorAll('.selected').forEach(el => {
