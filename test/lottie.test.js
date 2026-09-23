@@ -4,8 +4,30 @@ import {
     generateHighlightShapes,
     generateOpacityKeyframes,
     createHighlightLayer,
-    createBackgroundLayer
+    createBackgroundLayer,
+    getElementIdAtStep
 } from '../lib/lottie.js';
+
+test('getElementIdAtStep returns the first element at step 0', () => {
+    assert.equal(getElementIdAtStep(['a', 'b', 'c'], 0), 'a');
+});
+
+test('getElementIdAtStep wraps around for a path shorter than the step count', () => {
+    const elements = ['a', 'b'];
+    assert.equal(getElementIdAtStep(elements, 2), 'a');
+    assert.equal(getElementIdAtStep(elements, 3), 'b');
+    assert.equal(getElementIdAtStep(elements, 4), 'a');
+});
+
+test('getElementIdAtStep always returns the same element for a single-element path', () => {
+    const elements = ['only'];
+    assert.equal(getElementIdAtStep(elements, 0), 'only');
+    assert.equal(getElementIdAtStep(elements, 5), 'only');
+});
+
+test('getElementIdAtStep returns undefined for an empty path', () => {
+    assert.equal(getElementIdAtStep([], 0), undefined);
+});
 
 test('generateHighlightShapes sizes the rect with padding and returns a stroke group', () => {
     const [group] = generateHighlightShapes(100, 50, '#ff0000');

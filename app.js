@@ -6,7 +6,7 @@
 
 import { detectElements, getDetectorName } from './detectors/index.js';
 import { blendColors, PATH_COLORS } from './lib/colors.js';
-import { generateLottie, downloadLottie } from './lib/lottie.js';
+import { generateLottie, downloadLottie, getElementIdAtStep } from './lib/lottie.js';
 
 // =============================================================================
 // State
@@ -399,7 +399,7 @@ function loadSVG(file) {
  * Start the animation preview
  */
 function startPreview() {
-    const animatablePaths = paths.filter(p => p.elements.length >= 2);
+    const animatablePaths = paths.filter(p => p.elements.length >= 1);
     if (animatablePaths.length === 0) return;
 
     isAnimating = true;
@@ -413,7 +413,7 @@ function startPreview() {
     });
 
     const stepMs = parseInt(stepDurationInput.value);
-    const pathIndices = animatablePaths.map(() => 0);
+    let step = 0;
 
     function animateStep() {
         // Clear previous highlights
@@ -424,8 +424,9 @@ function startPreview() {
 
         // Collect currently active elements and their colors
         const activeElements = {};
-        animatablePaths.forEach((path, pathIdx) => {
-            const elementId = path.elements[pathIndices[pathIdx]];
+        animatablePaths.forEach(path => {
+            const elementId = getElementIdAtStep(path.elements, step);
+            if (elementId === undefined) return;
             if (!activeElements[elementId]) activeElements[elementId] = [];
             activeElements[elementId].push(path.color);
         });
@@ -441,10 +442,8 @@ function startPreview() {
             }
         });
 
-        // Advance indices
-        pathIndices.forEach((_, idx) => {
-            pathIndices[idx] = (pathIndices[idx] + 1) % animatablePaths[idx].elements.length;
-        });
+        // Advance to next step
+        step++;
 
         if (isAnimating) {
             const timer = setTimeout(animateStep, stepMs);
