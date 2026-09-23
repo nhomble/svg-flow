@@ -35,7 +35,7 @@ const registry = [
 /**
  * Parse SVG viewBox attribute
  */
-function parseViewBox(svg, svgRect) {
+export function parseViewBox(svg, svgRect) {
   let vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height;
 
   const viewBox = svg.getAttribute('viewBox');

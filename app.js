@@ -4,7 +4,7 @@
  * @module app
  */
 
-import { detectElements, getDetectorName } from './detectors/index.js';
+import { detectElements, getDetectorName, parseViewBox } from './detectors/index.js';
 import { blendColors, PATH_COLORS } from './lib/colors.js';
 import { generateLottie, downloadLottie, getElementIdAtStep } from './lib/lottie.js';
 
@@ -518,16 +518,7 @@ function stopPreview() {
  * @returns {{width: number, height: number}}
  */
 function getSvgDimensions(svg) {
-    let width = 800, height = 600;
-    const viewBox = svg.getAttribute('viewBox');
-    if (viewBox) {
-        const parts = viewBox.split(/[\s,]+/);
-        width = parseFloat(parts[2]) || 800;
-        height = parseFloat(parts[3]) || 600;
-    } else {
-        width = parseFloat(svg.getAttribute('width')) || 800;
-        height = parseFloat(svg.getAttribute('height')) || 600;
-    }
+    const { width, height } = parseViewBox(svg, svg.getBoundingClientRect());
     return { width, height };
 }
 
