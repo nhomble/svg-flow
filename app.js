@@ -4,16 +4,13 @@
  * @module app
  */
 
-import { detectElements, getDetectorName } from './detectors/index.js';
+import { detectElements, getDetectorName, parseViewBox } from './detectors/index.js';
 import { blendColors, PATH_COLORS } from './lib/colors.js';
-import { generateLottie, downloadLottie } from './lib/lottie.js';
+import { generateLottie, downloadLottie, getElementIdAtStep } from './lib/lottie.js';
 
 // =============================================================================
 // State
 // =============================================================================
-
-/** @type {string|null} Raw SVG content */
-let svgContent = null;
 
 /** @type {string|null} Base64-encoded original SVG for Lottie export */
 let svgBase64Clean = null;
@@ -24,8 +21,8 @@ let svgElements = {};
 /** @type {boolean} Whether animation preview is running */
 let isAnimating = false;
 
-/** @type {number[]} Active animation timer IDs */
-let animationTimers = [];
+/** @type {number|null} Currently scheduled animation timer ID */
+let animationTimer = null;
 
 /**
  * Animation path
@@ -69,6 +66,22 @@ const stepDurationInput = document.getElementById('step-duration');
 const elementInfo = document.getElementById('element-info');
 const fitBtn = document.getElementById('fit-btn');
 const actualBtn = document.getElementById('actual-btn');
+const loadNewBtn = document.getElementById('load-new-btn');
+
+const STEP_DURATION_DEFAULT_MS = 500;
+const STEP_DURATION_MIN_MS = 100;
+const STEP_DURATION_MAX_MS = 3000;
+
+/**
+ * Read and clamp the step duration input's value, guarding against
+ * NaN/empty/out-of-range values a user can type past the HTML min/max hints.
+ * @returns {number}
+ */
+function getStepMs() {
+    const parsed = parseInt(stepDurationInput.value, 10);
+    if (Number.isNaN(parsed)) return STEP_DURATION_DEFAULT_MS;
+    return Math.min(STEP_DURATION_MAX_MS, Math.max(STEP_DURATION_MIN_MS, parsed));
+}
 
 // =============================================================================
 // Path Management
@@ -118,8 +131,6 @@ function removeFromPath(idx) {
         updatePath();
     }
 }
-// Expose to global scope for onclick handlers
-window.removeFromPath = removeFromPath;
 
 /**
  * Fork a new path starting from an element in the current path
@@ -143,8 +154,6 @@ function forkFromElement(idx) {
     renderPathTabs();
     updatePath();
 }
-// Expose to global scope for onclick handlers
-window.forkFromElement = forkFromElement;
 
 /**
  * Add a new empty animation path
@@ -192,14 +201,43 @@ function updatePath() {
     const pathColor = path ? path.color : '#6c63ff';
 
     // Update list with fork buttons
-    pathList.innerHTML = elements.map((id, i) => `
-        <li>
-            <span class="num" style="background: ${pathColor}">${i + 1}</span>
-            <span class="name" title="${id}">${id}</span>
-            <button class="fork" onclick="forkFromElement(${i})" title="Fork new path from here">fork</button>
-            <button class="remove" onclick="removeFromPath(${i})">×</button>
-        </li>
-    `).join('');
+    pathList.innerHTML = '';
+    elements.forEach((id, i) => {
+        const li = document.createElement('li');
+
+        const num = document.createElement('span');
+        num.className = 'num';
+        num.style.background = pathColor;
+        num.textContent = i + 1;
+        li.appendChild(num);
+
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.setAttribute('title', id);
+        name.textContent = id;
+        li.appendChild(name);
+
+        const forkBtn = document.createElement('button');
+        forkBtn.className = 'fork';
+        forkBtn.title = 'Fork new path from here';
+        forkBtn.textContent = 'fork';
+        forkBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            forkFromElement(i);
+        });
+        li.appendChild(forkBtn);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            removeFromPath(i);
+        });
+        li.appendChild(removeBtn);
+
+        pathList.appendChild(li);
+    });
 
     // Clear existing highlights
     svgContainer.querySelectorAll('.selected').forEach(el => {
@@ -251,6 +289,7 @@ function renderPathTabs() {
     // Tab click handlers
     pathTabs.querySelectorAll('.path-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
+            if (isAnimating) return;
             if (e.target.classList.contains('delete-path')) return;
             activePathId = parseInt(tab.dataset.pathId);
             renderPathTabs();
@@ -261,6 +300,7 @@ function renderPathTabs() {
     // Delete button handlers
     pathTabs.querySelectorAll('.delete-path').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            if (isAnimating) return;
             e.stopPropagation();
             deletePath(parseInt(btn.dataset.pathId));
         });
@@ -269,7 +309,10 @@ function renderPathTabs() {
     // Add path button handler
     const addBtn = pathTabs.querySelector('#add-path-btn');
     if (addBtn) {
-        addBtn.addEventListener('click', addNewPath);
+        addBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            addNewPath();
+        });
     }
 }
 
@@ -290,16 +333,91 @@ function updateInfo(svg) {
 // =============================================================================
 
 /**
+ * Recursively strip script elements, event-handler attributes, and
+ * javascript: URIs from a parsed SVG document before it is inserted into the DOM.
+ * @param {Element} node - Root element to sanitize
+ */
+function sanitizeSvgNode(node) {
+    for (const attr of Array.from(node.attributes || [])) {
+        const name = attr.name.toLowerCase();
+        if (name.startsWith('on')) {
+            node.removeAttribute(attr.name);
+        } else if ((name === 'href' || name === 'xlink:href') && /^\s*javascript:/i.test(attr.value)) {
+            node.removeAttribute(attr.name);
+        }
+    }
+
+    const children = Array.from(node.children || []);
+    for (const child of children) {
+        if (child.tagName && child.tagName.toLowerCase() === 'script') {
+            child.remove();
+            continue;
+        }
+        sanitizeSvgNode(child);
+    }
+}
+
+/**
+ * Scope embedded <style> selectors to #svg-container so uploaded SVG CSS
+ * (e.g. Mermaid's own styling) can't leak out and affect the rest of the page.
+ * Stripping <style> entirely isn't viable since Mermaid relies on it for rendering.
+ * @param {Element} root - Element to search for <style> tags within (must already be attached to the document so .sheet is populated)
+ */
+function scopeEmbeddedStyles(root) {
+    const styleEls = root.querySelectorAll('style');
+    for (const styleEl of styleEls) {
+        let sheet;
+        try {
+            sheet = styleEl.sheet;
+        } catch (e) {
+            continue;
+        }
+        if (!sheet || !sheet.cssRules) {
+            continue;
+        }
+        try {
+            for (const rule of sheet.cssRules) {
+                if (rule.type === CSSRule.STYLE_RULE && rule.selectorText) {
+                    rule.selectorText = rule.selectorText
+                        .split(',')
+                        .map((selector) => `#svg-container ${selector.trim()}`)
+                        .join(', ');
+                }
+            }
+            styleEl.textContent = Array.from(sheet.cssRules).map((rule) => rule.cssText).join('\n');
+        } catch (e) {
+            continue;
+        }
+    }
+}
+
+/**
  * Load an SVG file and initialize the workspace
  * @param {File} file - SVG file to load
  */
 function loadSVG(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        svgContent = e.target.result;
+        const svgContent = e.target.result;
         // Store base64-encoded original before any DOM modifications
         svgBase64Clean = btoa(unescape(encodeURIComponent(svgContent)));
-        svgContainer.innerHTML = svgContent;
+
+        const parsedDoc = new DOMParser().parseFromString(svgContent, 'image/svg+xml');
+        if (parsedDoc.querySelector('parsererror')) {
+            console.error('Failed to parse SVG file: invalid XML');
+            alert('Failed to load SVG file. The file appears to be invalid.');
+            return;
+        }
+
+        const parsedRoot = parsedDoc.documentElement;
+        if (parsedRoot.tagName.toLowerCase() !== 'svg') {
+            console.error('Failed to parse SVG file: no svg root element');
+            alert('The file does not contain a valid SVG.');
+            return;
+        }
+        sanitizeSvgNode(parsedRoot);
+        svgContainer.replaceChildren(parsedRoot);
+        scopeEmbeddedStyles(svgContainer);
 
         const svg = svgContainer.querySelector('svg');
 
@@ -345,7 +463,9 @@ function loadSVG(file) {
  * Start the animation preview
  */
 function startPreview() {
-    const animatablePaths = paths.filter(p => p.elements.length >= 2);
+    if (isAnimating) return;
+
+    const animatablePaths = paths.filter(p => p.elements.length >= 1);
     if (animatablePaths.length === 0) return;
 
     isAnimating = true;
@@ -358,8 +478,8 @@ function startPreview() {
         el.style.outline = '';
     });
 
-    const stepMs = parseInt(stepDurationInput.value);
-    const pathIndices = animatablePaths.map(() => 0);
+    const stepMs = getStepMs();
+    let step = 0;
 
     function animateStep() {
         // Clear previous highlights
@@ -370,8 +490,9 @@ function startPreview() {
 
         // Collect currently active elements and their colors
         const activeElements = {};
-        animatablePaths.forEach((path, pathIdx) => {
-            const elementId = path.elements[pathIndices[pathIdx]];
+        animatablePaths.forEach(path => {
+            const elementId = getElementIdAtStep(path.elements, step);
+            if (elementId === undefined) return;
             if (!activeElements[elementId]) activeElements[elementId] = [];
             activeElements[elementId].push(path.color);
         });
@@ -387,14 +508,11 @@ function startPreview() {
             }
         });
 
-        // Advance indices
-        pathIndices.forEach((_, idx) => {
-            pathIndices[idx] = (pathIndices[idx] + 1) % animatablePaths[idx].elements.length;
-        });
+        // Advance to next step
+        step++;
 
         if (isAnimating) {
-            const timer = setTimeout(animateStep, stepMs);
-            animationTimers.push(timer);
+            animationTimer = setTimeout(animateStep, stepMs);
         }
     }
 
@@ -407,8 +525,10 @@ function startPreview() {
 function stopPreview() {
     isAnimating = false;
 
-    animationTimers.forEach(timer => clearTimeout(timer));
-    animationTimers = [];
+    if (animationTimer !== null) {
+        clearTimeout(animationTimer);
+        animationTimer = null;
+    }
 
     svgPanel.classList.remove('previewing');
     previewOverlay.classList.remove('active');
@@ -430,16 +550,7 @@ function stopPreview() {
  * @returns {{width: number, height: number}}
  */
 function getSvgDimensions(svg) {
-    let width = 800, height = 600;
-    const viewBox = svg.getAttribute('viewBox');
-    if (viewBox) {
-        const parts = viewBox.split(/[\s,]+/);
-        width = parseFloat(parts[2]) || 800;
-        height = parseFloat(parts[3]) || 600;
-    } else {
-        width = parseFloat(svg.getAttribute('width')) || 800;
-        height = parseFloat(svg.getAttribute('height')) || 600;
-    }
+    const { width, height } = parseViewBox(svg, svg.getBoundingClientRect());
     return { width, height };
 }
 
@@ -455,7 +566,7 @@ async function handleDownload() {
 
     try {
         const lottieData = await generateLottie({
-            stepMs: parseInt(stepDurationInput.value),
+            stepMs: getStepMs(),
             fps: 30,
             width,
             height,
@@ -489,7 +600,7 @@ dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.svg')) loadSVG(file);
+    if (file && file.name.toLowerCase().endsWith('.svg')) loadSVG(file);
 });
 fileInput.addEventListener('change', (e) => {
     if (e.target.files[0]) loadSVG(e.target.files[0]);
@@ -507,6 +618,10 @@ actualBtn.addEventListener('click', () => {
     svgContainer.classList.add('actual-size');
     actualBtn.classList.add('active');
     fitBtn.classList.remove('active');
+});
+loadNewBtn.addEventListener('click', () => {
+    if (isAnimating) return;
+    fileInput.click();
 });
 
 // Pan functionality
@@ -531,6 +646,7 @@ document.addEventListener('mouseup', () => {
 
 // Path controls
 clearPathBtn.addEventListener('click', () => {
+    if (isAnimating) return;
     const path = getActivePath();
     if (path) {
         path.elements = [];

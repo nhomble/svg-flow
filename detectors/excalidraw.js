@@ -11,8 +11,10 @@ export default {
    * Check if this SVG appears to be Excalidraw output
    */
   canHandle(svg) {
-    // Excalidraw uses stroke-linecap="round" on shape groups
-    return svg.querySelector('g[stroke-linecap="round"]') !== null;
+    // Excalidraw uses stroke-linecap="round" on shape groups, but other tools
+    // use the same attribute for styling; a single match is too common to be
+    // reliable, so require multiple occurrences (typical of real exports).
+    return svg.querySelectorAll('g[stroke-linecap="round"]').length >= 2;
   },
 
   /**
@@ -26,7 +28,6 @@ export default {
     // The transform attribute indicates a positioned shape (not an arrow container)
     svg.querySelectorAll('g[stroke-linecap="round"][transform]').forEach(el => {
       if (ctx.isInDefs(el)) return;
-      if (el.dataset.svgflowId) return; // Already processed
 
       const rect = el.getBoundingClientRect();
 
@@ -34,6 +35,7 @@ export default {
       if (rect.width < 15 || rect.height < 15) return;
 
       const id = el.id || ctx.nextShapeId();
+      ctx.claimId(id);
 
       elements.push({
         id,
@@ -48,12 +50,16 @@ export default {
     // These are container groups that hold nested path groups
     svg.querySelectorAll('g[stroke-linecap="round"]:not([transform])').forEach(el => {
       if (ctx.isInDefs(el)) return;
-      if (el.dataset.svgflowId) return; // Already processed
+
+      // Skip nested groups already covered by an ancestor arrow container,
+      // otherwise one visual arrow gets counted as multiple elements.
+      if (el.parentElement && el.parentElement.closest('g[stroke-linecap="round"]:not([transform])')) return;
 
       const rect = el.getBoundingClientRect();
       if (rect.width < 5 || rect.height < 5) return;
 
       const id = el.id || ctx.nextArrowId();
+      ctx.claimId(id);
 
       elements.push({
         id,

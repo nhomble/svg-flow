@@ -35,7 +35,7 @@ const registry = [
 /**
  * Parse SVG viewBox attribute
  */
-function parseViewBox(svg, svgRect) {
+export function parseViewBox(svg, svgRect) {
   let vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height;
 
   const viewBox = svg.getAttribute('viewBox');
@@ -64,10 +64,20 @@ function createContext(svg, svgRect) {
   const viewBox = parseViewBox(svg, svgRect);
   let shapeIdx = 0;
   let arrowIdx = 0;
+  // Real element ids are discovered incrementally as each detector iterates,
+  // so collision-avoidance must track claimed ids as they're seen rather than upfront.
+  const claimedIds = new Set();
 
   return {
     svgRect,
     viewBox,
+
+    /**
+     * Register an id (real or generated) so future generated ids avoid it
+     */
+    claimId(id) {
+      claimedIds.add(id);
+    },
 
     /**
      * Convert screen coordinates to viewBox coordinates
@@ -85,14 +95,22 @@ function createContext(svg, svgRect) {
      * Generate unique shape ID
      */
     nextShapeId() {
-      return `shape-${++shapeIdx}`;
+      let id;
+      do {
+        id = `shape-${++shapeIdx}`;
+      } while (claimedIds.has(id));
+      return id;
     },
 
     /**
      * Generate unique arrow ID
      */
     nextArrowId() {
-      return `arrow-${++arrowIdx}`;
+      let id;
+      do {
+        id = `arrow-${++arrowIdx}`;
+      } while (claimedIds.has(id));
+      return id;
     },
 
     /**
@@ -148,11 +166,8 @@ export function detectElements(svg, svgRect) {
   // Create context with helpers
   const ctx = createContext(svg, svgRect);
 
-  // Sort detectors by priority (highest first)
-  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
-
   // Find first detector that can handle this SVG
-  const detector = sorted.find(d => d.canHandle(svg));
+  const detector = findDetector(svg);
 
   if (!detector) {
     console.warn('[svg-flow] No detector found for SVG');
@@ -175,22 +190,15 @@ export function detectElements(svg, svgRect) {
  * Useful for UI display
  */
 export function getDetectorName(svg) {
-  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
-  const detector = sorted.find(d => d.canHandle(svg));
+  const detector = findDetector(svg);
   return detector ? detector.name : 'unknown';
 }
 
 /**
- * Register a new detector
- * Use this to add custom detectors at runtime
+ * Sort detectors by priority (highest first) and find the first one
+ * that can handle this SVG. Shared by detectElements and getDetectorName.
  */
-export function registerDetector(detector) {
-  if (!detector.name || !detector.canHandle || !detector.detect) {
-    throw new Error('Detector must have name, canHandle, and detect properties');
-  }
-  if (typeof detector.priority !== 'number') {
-    detector.priority = 1; // Default priority
-  }
-  registry.push(detector);
-  console.log(`[svg-flow] Registered detector: ${detector.name}`);
+function findDetector(svg) {
+  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
+  return sorted.find(d => d.canHandle(svg));
 }

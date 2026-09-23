@@ -35,9 +35,11 @@ export default {
       const rect = el.getBoundingClientRect();
       if (rect.width < 10 || rect.height < 10) return;
 
-      // Extract node name from ID: "flowchart-A-0" → "A"
-      const parts = el.id.split('-');
-      const id = parts.length >= 2 ? parts[1] : el.id;
+      // Extract node name from ID: "flowchart-my-node-0" -> "my-node"
+      // Mermaid ids are "flowchart-<node-name>-<counter>"; the node name
+      // itself can contain dashes, so split-by-index truncates it.
+      const nodeMatch = el.id.match(/^flowchart-(.+)-\d+$/);
+      const id = nodeMatch ? nodeMatch[1] : el.id;
 
       if (seenIds.has(id)) return;
       seenIds.add(id);
@@ -58,18 +60,21 @@ export default {
       const rect = el.getBoundingClientRect();
       if (rect.width < 5 && rect.height < 5) return;
 
-      // Extract edge info from ID: "L_A_B_0" → "A→B"
-      const parts = el.id.split('_');
-      if (parts.length < 3) return;
+      // Mermaid edge ids look like "L_A_B_0" ("L_<source>_<target>_<counter>"),
+      // but node names can themselves contain underscores, so splitting on
+      // "_" can't reliably recover source/target. Only the trailing counter
+      // is unambiguous. Use the raw id (always unique per SVG, including for
+      // parallel edges like "L_A_B_0"/"L_A_B_1") as the dedup key and id, and
+      // derive a best-effort friendlier label for display only.
+      if (seenIds.has(el.id)) return;
+      seenIds.add(el.id);
 
-      const id = `${parts[1]}→${parts[2]}`;
-
-      // Skip duplicates (Mermaid creates multiple elements with same ID pattern)
-      if (seenIds.has(id)) return;
-      seenIds.add(id);
+      const edgeMatch = el.id.match(/^L_(.+)_(\d+)$/);
+      const label = edgeMatch ? edgeMatch[1].replace(/_/g, '→') : el.id;
 
       elements.push({
-        id,
+        id: el.id,
+        label,
         element: el,
         bounds: ctx.toViewBox(rect),
         type: 'edge'

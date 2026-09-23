@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none';">
     <title>svg-flow - SVG Flow Animator</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <style>
@@ -273,6 +274,7 @@
         /* Animation state */
         .previewing #svg-container [id] { cursor: default; }
         .previewing #svg-container [id]:hover { filter: none; }
+        #svg-panel.previewing + .sidebar { pointer-events: none; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -289,6 +291,7 @@
                 <div id="svg-toolbar">
                     <button id="fit-btn" class="active">Fit to View</button>
                     <button id="actual-btn">Actual Size</button>
+                    <button id="load-new-btn">Load New File</button>
                     <span style="color: #888; font-size: 12px; margin-left: 8px; align-self: center;">Drag to pan when zoomed</span>
                 </div>
                 <div id="svg-container" class="fit-view"></div>
