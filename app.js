@@ -361,6 +361,40 @@ function sanitizeSvgNode(node) {
 }
 
 /**
+ * Scope embedded <style> selectors to #svg-container so uploaded SVG CSS
+ * (e.g. Mermaid's own styling) can't leak out and affect the rest of the page.
+ * Stripping <style> entirely isn't viable since Mermaid relies on it for rendering.
+ * @param {Element} root - Element to search for <style> tags within (must already be attached to the document so .sheet is populated)
+ */
+function scopeEmbeddedStyles(root) {
+    const styleEls = root.querySelectorAll('style');
+    for (const styleEl of styleEls) {
+        let sheet;
+        try {
+            sheet = styleEl.sheet;
+        } catch (e) {
+            continue;
+        }
+        if (!sheet || !sheet.cssRules) {
+            continue;
+        }
+        try {
+            for (const rule of sheet.cssRules) {
+                if (rule.type === CSSRule.STYLE_RULE && rule.selectorText) {
+                    rule.selectorText = rule.selectorText
+                        .split(',')
+                        .map((selector) => `#svg-container ${selector.trim()}`)
+                        .join(', ');
+                }
+            }
+            styleEl.textContent = Array.from(sheet.cssRules).map((rule) => rule.cssText).join('\n');
+        } catch (e) {
+            continue;
+        }
+    }
+}
+
+/**
  * Load an SVG file and initialize the workspace
  * @param {File} file - SVG file to load
  */
@@ -386,6 +420,7 @@ function loadSVG(file) {
         }
         sanitizeSvgNode(parsedRoot);
         svgContainer.replaceChildren(parsedRoot);
+        scopeEmbeddedStyles(svgContainer);
 
         const svg = svgContainer.querySelector('svg');
 
