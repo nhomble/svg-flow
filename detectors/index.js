@@ -166,11 +166,8 @@ export function detectElements(svg, svgRect) {
   // Create context with helpers
   const ctx = createContext(svg, svgRect);
 
-  // Sort detectors by priority (highest first)
-  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
-
   // Find first detector that can handle this SVG
-  const detector = sorted.find(d => d.canHandle(svg));
+  const detector = findDetector(svg);
 
   if (!detector) {
     console.warn('[svg-flow] No detector found for SVG');
@@ -193,22 +190,15 @@ export function detectElements(svg, svgRect) {
  * Useful for UI display
  */
 export function getDetectorName(svg) {
-  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
-  const detector = sorted.find(d => d.canHandle(svg));
+  const detector = findDetector(svg);
   return detector ? detector.name : 'unknown';
 }
 
 /**
- * Register a new detector
- * Use this to add custom detectors at runtime
+ * Sort detectors by priority (highest first) and find the first one
+ * that can handle this SVG. Shared by detectElements and getDetectorName.
  */
-export function registerDetector(detector) {
-  if (!detector.name || !detector.canHandle || !detector.detect) {
-    throw new Error('Detector must have name, canHandle, and detect properties');
-  }
-  if (typeof detector.priority !== 'number') {
-    detector.priority = 1; // Default priority
-  }
-  registry.push(detector);
-  console.log(`[svg-flow] Registered detector: ${detector.name}`);
+function findDetector(svg) {
+  const sorted = [...registry].sort((a, b) => b.priority - a.priority);
+  return sorted.find(d => d.canHandle(svg));
 }

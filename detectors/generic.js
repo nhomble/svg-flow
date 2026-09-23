@@ -27,7 +27,6 @@ export default {
     // Find all basic shapes
     svg.querySelectorAll('rect, circle, ellipse, polygon').forEach(el => {
       if (ctx.isInDefs(el)) return;
-      if (el.dataset.svgflowId) return; // Already processed
 
       const rect = el.getBoundingClientRect();
 

@@ -12,9 +12,6 @@ import { generateLottie, downloadLottie, getElementIdAtStep } from './lib/lottie
 // State
 // =============================================================================
 
-/** @type {string|null} Raw SVG content */
-let svgContent = null;
-
 /** @type {string|null} Base64-encoded original SVG for Lottie export */
 let svgBase64Clean = null;
 
@@ -401,7 +398,7 @@ function scopeEmbeddedStyles(root) {
 function loadSVG(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        svgContent = e.target.result;
+        const svgContent = e.target.result;
         // Store base64-encoded original before any DOM modifications
         svgBase64Clean = btoa(unescape(encodeURIComponent(svgContent)));
 

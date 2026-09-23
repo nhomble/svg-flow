@@ -28,7 +28,6 @@ export default {
     // The transform attribute indicates a positioned shape (not an arrow container)
     svg.querySelectorAll('g[stroke-linecap="round"][transform]').forEach(el => {
       if (ctx.isInDefs(el)) return;
-      if (el.dataset.svgflowId) return; // Already processed
 
       const rect = el.getBoundingClientRect();
 
@@ -51,7 +50,6 @@ export default {
     // These are container groups that hold nested path groups
     svg.querySelectorAll('g[stroke-linecap="round"]:not([transform])').forEach(el => {
       if (ctx.isInDefs(el)) return;
-      if (el.dataset.svgflowId) return; // Already processed
 
       // Skip nested groups already covered by an ancestor arrow container,
       // otherwise one visual arrow gets counted as multiple elements.
