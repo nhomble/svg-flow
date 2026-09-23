@@ -69,6 +69,7 @@ const stepDurationInput = document.getElementById('step-duration');
 const elementInfo = document.getElementById('element-info');
 const fitBtn = document.getElementById('fit-btn');
 const actualBtn = document.getElementById('actual-btn');
+const loadNewBtn = document.getElementById('load-new-btn');
 
 const STEP_DURATION_DEFAULT_MS = 500;
 const STEP_DURATION_MIN_MS = 100;
@@ -589,6 +590,10 @@ actualBtn.addEventListener('click', () => {
     svgContainer.classList.add('actual-size');
     actualBtn.classList.add('active');
     fitBtn.classList.remove('active');
+});
+loadNewBtn.addEventListener('click', () => {
+    if (isAnimating) return;
+    fileInput.click();
 });
 
 // Pan functionality
