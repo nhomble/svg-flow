@@ -290,6 +290,31 @@ function updateInfo(svg) {
 // =============================================================================
 
 /**
+ * Recursively strip script elements, event-handler attributes, and
+ * javascript: URIs from a parsed SVG document before it is inserted into the DOM.
+ * @param {Element} node - Root element to sanitize
+ */
+function sanitizeSvgNode(node) {
+    for (const attr of Array.from(node.attributes || [])) {
+        const name = attr.name.toLowerCase();
+        if (name.startsWith('on')) {
+            node.removeAttribute(attr.name);
+        } else if ((name === 'href' || name === 'xlink:href') && /^\s*javascript:/i.test(attr.value)) {
+            node.removeAttribute(attr.name);
+        }
+    }
+
+    const children = Array.from(node.children || []);
+    for (const child of children) {
+        if (child.tagName && child.tagName.toLowerCase() === 'script') {
+            child.remove();
+            continue;
+        }
+        sanitizeSvgNode(child);
+    }
+}
+
+/**
  * Load an SVG file and initialize the workspace
  * @param {File} file - SVG file to load
  */
@@ -299,7 +324,17 @@ function loadSVG(file) {
         svgContent = e.target.result;
         // Store base64-encoded original before any DOM modifications
         svgBase64Clean = btoa(unescape(encodeURIComponent(svgContent)));
-        svgContainer.innerHTML = svgContent;
+
+        const parsedDoc = new DOMParser().parseFromString(svgContent, 'image/svg+xml');
+        if (parsedDoc.querySelector('parsererror')) {
+            console.error('Failed to parse SVG file: invalid XML');
+            alert('Failed to load SVG file. The file appears to be invalid.');
+            return;
+        }
+
+        const parsedRoot = parsedDoc.documentElement;
+        sanitizeSvgNode(parsedRoot);
+        svgContainer.replaceChildren(parsedRoot);
 
         const svg = svgContainer.querySelector('svg');
 
