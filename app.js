@@ -24,8 +24,8 @@ let svgElements = {};
 /** @type {boolean} Whether animation preview is running */
 let isAnimating = false;
 
-/** @type {number[]} Active animation timer IDs */
-let animationTimers = [];
+/** @type {number|null} Currently scheduled animation timer ID */
+let animationTimer = null;
 
 /**
  * Animation path
@@ -223,13 +223,19 @@ function updatePath() {
         forkBtn.className = 'fork';
         forkBtn.title = 'Fork new path from here';
         forkBtn.textContent = 'fork';
-        forkBtn.addEventListener('click', () => forkFromElement(i));
+        forkBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            forkFromElement(i);
+        });
         li.appendChild(forkBtn);
 
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove';
         removeBtn.textContent = '×';
-        removeBtn.addEventListener('click', () => removeFromPath(i));
+        removeBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            removeFromPath(i);
+        });
         li.appendChild(removeBtn);
 
         pathList.appendChild(li);
@@ -285,6 +291,7 @@ function renderPathTabs() {
     // Tab click handlers
     pathTabs.querySelectorAll('.path-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
+            if (isAnimating) return;
             if (e.target.classList.contains('delete-path')) return;
             activePathId = parseInt(tab.dataset.pathId);
             renderPathTabs();
@@ -295,6 +302,7 @@ function renderPathTabs() {
     // Delete button handlers
     pathTabs.querySelectorAll('.delete-path').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            if (isAnimating) return;
             e.stopPropagation();
             deletePath(parseInt(btn.dataset.pathId));
         });
@@ -303,7 +311,10 @@ function renderPathTabs() {
     // Add path button handler
     const addBtn = pathTabs.querySelector('#add-path-btn');
     if (addBtn) {
-        addBtn.addEventListener('click', addNewPath);
+        addBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            addNewPath();
+        });
     }
 }
 
@@ -414,6 +425,8 @@ function loadSVG(file) {
  * Start the animation preview
  */
 function startPreview() {
+    if (isAnimating) return;
+
     const animatablePaths = paths.filter(p => p.elements.length >= 1);
     if (animatablePaths.length === 0) return;
 
@@ -461,8 +474,7 @@ function startPreview() {
         step++;
 
         if (isAnimating) {
-            const timer = setTimeout(animateStep, stepMs);
-            animationTimers.push(timer);
+            animationTimer = setTimeout(animateStep, stepMs);
         }
     }
 
@@ -475,8 +487,10 @@ function startPreview() {
 function stopPreview() {
     isAnimating = false;
 
-    animationTimers.forEach(timer => clearTimeout(timer));
-    animationTimers = [];
+    if (animationTimer !== null) {
+        clearTimeout(animationTimer);
+        animationTimer = null;
+    }
 
     svgPanel.classList.remove('previewing');
     previewOverlay.classList.remove('active');
@@ -599,6 +613,7 @@ document.addEventListener('mouseup', () => {
 
 // Path controls
 clearPathBtn.addEventListener('click', () => {
+    if (isAnimating) return;
     const path = getActivePath();
     if (path) {
         path.elements = [];
