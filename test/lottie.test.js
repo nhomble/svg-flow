@@ -70,3 +70,19 @@ test('createBackgroundLayer references the svg background asset', () => {
     assert.equal(layer.refId, 'svg_bg');
     assert.equal(layer.op, 30);
 });
+
+test('createHighlightLayer keeps opacity keyframes non-negative and non-decreasing with a tiny framesPerStep', () => {
+    const element = { id: 'node-a', cx: 5, cy: 5, width: 10, height: 10 };
+    const framesPerStep = 3;
+    const step = 1;
+    const totalFrames = framesPerStep * 3;
+    const layer = createHighlightLayer(element, step, '#00ff00', framesPerStep, totalFrames, 2);
+    const kfs = layer.ks.o.k;
+
+    for (const kf of kfs) {
+        assert.ok(kf.t >= 0, `keyframe t should be non-negative, got ${kf.t}`);
+    }
+    for (let i = 1; i < kfs.length; i++) {
+        assert.ok(kfs[i].t >= kfs[i - 1].t, `keyframes should be non-decreasing: ${kfs[i - 1].t} -> ${kfs[i].t}`);
+    }
+});

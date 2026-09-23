@@ -70,6 +70,21 @@ const elementInfo = document.getElementById('element-info');
 const fitBtn = document.getElementById('fit-btn');
 const actualBtn = document.getElementById('actual-btn');
 
+const STEP_DURATION_DEFAULT_MS = 500;
+const STEP_DURATION_MIN_MS = 100;
+const STEP_DURATION_MAX_MS = 3000;
+
+/**
+ * Read and clamp the step duration input's value, guarding against
+ * NaN/empty/out-of-range values a user can type past the HTML min/max hints.
+ * @returns {number}
+ */
+function getStepMs() {
+    const parsed = parseInt(stepDurationInput.value, 10);
+    if (Number.isNaN(parsed)) return STEP_DURATION_DEFAULT_MS;
+    return Math.min(STEP_DURATION_MAX_MS, Math.max(STEP_DURATION_MIN_MS, parsed));
+}
+
 // =============================================================================
 // Path Management
 // =============================================================================
@@ -412,7 +427,7 @@ function startPreview() {
         el.style.outline = '';
     });
 
-    const stepMs = parseInt(stepDurationInput.value);
+    const stepMs = getStepMs();
     let step = 0;
 
     function animateStep() {
@@ -508,7 +523,7 @@ async function handleDownload() {
 
     try {
         const lottieData = await generateLottie({
-            stepMs: parseInt(stepDurationInput.value),
+            stepMs: getStepMs(),
             fps: 30,
             width,
             height,
