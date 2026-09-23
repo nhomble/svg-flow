@@ -34,6 +34,7 @@ export default {
       if (rect.width < 15 || rect.height < 15) return;
 
       const id = el.id || ctx.nextShapeId();
+      ctx.claimId(id);
 
       elements.push({
         id,
@@ -54,6 +55,7 @@ export default {
       if (rect.width < 5 || rect.height < 5) return;
 
       const id = el.id || ctx.nextArrowId();
+      ctx.claimId(id);
 
       elements.push({
         id,

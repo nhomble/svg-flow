@@ -64,10 +64,20 @@ function createContext(svg, svgRect) {
   const viewBox = parseViewBox(svg, svgRect);
   let shapeIdx = 0;
   let arrowIdx = 0;
+  // Real element ids are discovered incrementally as each detector iterates,
+  // so collision-avoidance must track claimed ids as they're seen rather than upfront.
+  const claimedIds = new Set();
 
   return {
     svgRect,
     viewBox,
+
+    /**
+     * Register an id (real or generated) so future generated ids avoid it
+     */
+    claimId(id) {
+      claimedIds.add(id);
+    },
 
     /**
      * Convert screen coordinates to viewBox coordinates
@@ -85,14 +95,22 @@ function createContext(svg, svgRect) {
      * Generate unique shape ID
      */
     nextShapeId() {
-      return `shape-${++shapeIdx}`;
+      let id;
+      do {
+        id = `shape-${++shapeIdx}`;
+      } while (claimedIds.has(id));
+      return id;
     },
 
     /**
      * Generate unique arrow ID
      */
     nextArrowId() {
-      return `arrow-${++arrowIdx}`;
+      let id;
+      do {
+        id = `arrow-${++arrowIdx}`;
+      } while (claimedIds.has(id));
+      return id;
     },
 
     /**
